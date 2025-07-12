@@ -20,26 +20,11 @@ socket.on("connect", () => {
   const phaserGameRef = useRef<any>(null)
   const [gameLoaded, setGameLoaded] = useState(false)
   const [playerScore, setPlayerScore] = useState(0)
-  useEffect(() => {
-    if (typeof socket !== "undefined") {
-      socket.on("scoreUpdate", ({ playerId, score }) => {
-        if (playerId === socket.id) {
-          setPlayerScore(score)
-        }
-      })
-    }
-    return () => {
-      if (typeof socket !== "undefined") {
-        socket.off("scoreUpdate")
-      }
-    }
-  }, [])
   const [players, setPlayers] = useState([])
-  const [playerScore, setPlayerScore] = useState(0)
   useEffect(() => {
     if (typeof socket !== "undefined") {
       socket.on("scoreUpdate", ({ playerId, score }) => {
-        setPlayers((prev) => {
+        setPlayers((prev: any[]) => {
           const updated = prev.filter((p) => p.id !== playerId)
           return [...updated, { id: playerId, score }]
         })
@@ -307,67 +292,7 @@ socket.on("connect", () => {
     this.lastFired = time
   }
 
-  function update(this: any) {
-    if (!this.player) return
-
-    const speed = 200
-
-    // Reset velocity
-    this.player.setVelocity(0)
-
-    // Movement controls
-    if (this.cursors.left.isDown || this.wasd.A.isDown) {
-      this.player.setVelocityX(-speed)
-      this.player.setRotation(-Math.PI / 2) // Face left
-    } else if (this.cursors.right.isDown || this.wasd.D.isDown) {
-      this.player.setVelocityX(speed)
-      this.player.setRotation(Math.PI / 2) // Face right
-    }
-
-    if (this.cursors.up.isDown || this.wasd.W.isDown) {
-      this.player.setVelocityY(-speed)
-      this.player.setRotation(0) // Face up
-    } else if (this.cursors.down.isDown || this.wasd.S.isDown) {
-      this.player.setVelocityY(speed)
-      this.player.setRotation(Math.PI) // Face down
-    }
-
-    // Diagonal movement rotation
-    if ((this.cursors.left.isDown || this.wasd.A.isDown) && (this.cursors.up.isDown || this.wasd.W.isDown)) {
-      this.player.setRotation(-Math.PI / 4) // Face up-left
-    } else if ((this.cursors.right.isDown || this.wasd.D.isDown) && (this.cursors.up.isDown || this.wasd.W.isDown)) {
-      this.player.setRotation(Math.PI / 4) // Face up-right
-    } else if ((this.cursors.left.isDown || this.wasd.A.isDown) && (this.cursors.down.isDown || this.wasd.S.isDown)) {
-      this.player.setRotation((-3 * Math.PI) / 4) // Face down-left
-    } else if ((this.cursors.right.isDown || this.wasd.D.isDown) && (this.cursors.down.isDown || this.wasd.S.isDown)) {
-      this.player.setRotation((3 * Math.PI) / 4) // Face down-right
-    }
-
-    // Firing controls
-    if (Phaser.Input.Keyboard.JustDown(this.spaceKey)) {
-      fireRocket.call(this)
-    }
-
-    // Clean up rockets that are off-screen
-    this.rockets.children.entries.forEach((rocket: any) => {
-      if (rocket.active) {
-        const bounds = this.physics.world.bounds
-        if (
-          rocket.x < bounds.x - 100 ||
-          rocket.x > bounds.width + 100 ||
-          rocket.y < bounds.y - 100 ||
-          rocket.y > bounds.height + 100
-        ) {
-          rocket.destroy()
-        }
-      }
-    })
-  }
-
-  return (
-    </AuthGuard>
-        <div className="absolute inset-0">
-          <div ref={gameRef} className="w-full h-full" />
+  // update is a Phaser scene method, not a React render
 
           {/* Game UI Overlay */}
           <div className="absolute top-4 left-4 z-20">
@@ -469,12 +394,127 @@ socket.on("connect", () => {
             </div>
           </div>
 
-          {!gameLoaded && (
-            <div className="absolute inset-0 flex items-center justify-center bg-purple-600 z-30">
-              <div className="text-white text-2xl font-bold">Loading Game...</div>
-            </div>
-          )}
+// Main React component render
+export default function GamePage() {
+  const gameRef = useRef<HTMLDivElement>(null)
+  const router = useRouter()
+  const [gameLoaded, setGameLoaded] = useState(false)
+  const [playerScore, setPlayerScore] = useState(0)
+  const [players, setPlayers] = useState([])
+
+  // ...existing hooks and logic...
+
+  return (
+    <AuthGuard>
+      <div className="absolute inset-0">
+        <div ref={gameRef} className="w-full h-full" />
+
+        {/* Game UI Overlay */}
+        <div className="absolute top-4 left-4 z-20">
+          <Button
+            onClick={() => router.push("/home")}
+            variant="ghost"
+            className="text-white hover:bg-white/20 bg-black/50"
+          >
+            <ArrowLeft className="h-6 w-6 mr-2" />
+            Exit Game
+          </Button>
         </div>
+
+        {/* Health Bar */}
+        <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-20">
+          <div className="bg-black/50 px-4 py-2 rounded-lg">
+            <div className="flex space-x-1">
+              {[...Array(7)].map((_, i) => (
+                <div key={i} className={`w-6 h-6 rounded ${i < 5 ? "bg-red-500" : "bg-gray-600"}`} />
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Controls Info */}
+        <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 z-20">
+          <div className="bg-black/50 px-4 py-2 rounded-lg text-white text-sm">
+            <div className="text-center">
+              <span className="font-bold">WASD</span> to move • <span className="font-bold">SPACE</span> to fire
+            </div>
+          </div>
+        </div>
+
+        {/* Compact Leaderboard - Top Right, taller to fit all content */}
+        <div className="absolute top-4 right-4 w-64 bg-black/30 backdrop-blur-sm text-white p-4 rounded-lg z-10 h-80">
+          <div className="mb-4">
+            <h2 className="text-sm font-bold mb-3 flex items-center">
+              <Trophy className="h-4 w-4 mr-1 text-yellow-400" />
+              Leaderboard
+            </h2>
+            <div className="space-y-2 text-xs">
+              {[...players]
+                .sort((a, b) => b.score - a.score)
+                .slice(0, 3)
+                .map((player, index) => (
+                  <div key={player.id} className="flex items-center justify-between p-2 bg-white/10 rounded">
+                    <div className="flex items-center space-x-2">
+                      <span className="text-yellow-400 font-bold">#{index + 1}</span>
+                      <span className="truncate max-w-20">{player.id === (typeof socket !== "undefined" ? socket.id : "") ? "You" : player.id.slice(0, 8)}</span>
+                    </div>
+                    <div className="text-xs">
+                      <span className="text-yellow-400 ml-2">{player.score} pts</span>
+                    </div>
+                  </div>
+                ))}
+            </div>
+          </div>
+
+          <div className="mb-4">
+            <h3 className="text-sm font-bold mb-2 flex items-center">
+              <Users className="h-4 w-4 mr-1" />
+              Online
+            </h3>
+            <div className="text-2xl font-bold text-green-400">{players.length}/20</div>
+          </div>
+
+          <div className="border-t border-white/20 pt-3">
+            <div className="flex items-center justify-between p-2 bg-white/10 rounded">
+              <div className="flex items-center space-x-2">
+                <span className="text-blue-400 font-bold">You</span>
+                <span className="truncate max-w-20">Player</span>
+              </div>
+              <div className="text-xs">
+                <span className="text-yellow-400 ml-2">{playerScore} pts</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Shoot Button - Bottom Right */}
+        <div className="absolute bottom-6 right-6 z-20">
+          <Button
+            className="w-20 h-20 rounded-full bg-red-600/80 hover:bg-red-700/80 border-4 border-red-800/80 text-white font-bold text-lg shadow-2xl backdrop-blur-sm"
+            onMouseDown={() => console.log("Shooting!")}
+          >
+            <div className="flex flex-col items-center">
+              <div className="text-2xl">🔥</div>
+              <span className="text-xs">SHOOT</span>
+            </div>
+          </Button>
+        </div>
+
+        {/* Virtual Joystick - Bottom Left */}
+        <div className="absolute bottom-6 left-6 z-20">
+          <div className="relative">
+            <div className="w-24 h-24 rounded-full bg-black/30 backdrop-blur-sm border-4 border-white/20 flex items-center justify-center">
+              <div className="w-12 h-12 rounded-full bg-white/40 backdrop-blur-sm border-2 border-white/60"></div>
+            </div>
+          </div>
+        </div>
+
+        {!gameLoaded && (
+          <div className="absolute inset-0 flex items-center justify-center bg-purple-600 z-30">
+            <div className="text-white text-2xl font-bold">Loading Game...</div>
+          </div>
+        )}
       </div>
     </AuthGuard>
+  )
 }
