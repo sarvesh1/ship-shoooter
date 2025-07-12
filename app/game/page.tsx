@@ -365,9 +365,7 @@ socket.on("connect", () => {
   }
 
   return (
-    <AuthGuard>
-      <div className="min-h-screen bg-purple-600 relative overflow-hidden">
-        {/* Game Area - Full Screen */}
+    </AuthGuard>
         <div className="absolute inset-0">
           <div ref={gameRef} className="w-full h-full" />
 
@@ -479,5 +477,4 @@ socket.on("connect", () => {
         </div>
       </div>
     </AuthGuard>
-  )
 }
