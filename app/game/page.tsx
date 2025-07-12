@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
+import { io } from "socket.io-client"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { AuthGuard } from "@/components/auth-guard"
@@ -9,18 +10,55 @@ import { ArrowLeft, Users, Trophy } from "lucide-react"
 // Phaser game will be loaded dynamically
 let Phaser: any = null
 
-export default function GamePage() {
+// Connect to Socket.IO server at /api/socket
+const socket = io("/api/socket", { transports: ["websocket"] })
+
+socket.on("connect", () => {
+  console.log("Connected to Socket.IO server:", socket.id)
+})
   const gameRef = useRef<HTMLDivElement>(null)
   const phaserGameRef = useRef<any>(null)
   const [gameLoaded, setGameLoaded] = useState(false)
-  const [players, setPlayers] = useState([
-    { name: "Player1", kills: 5, coins: 12 },
-    { name: "Player2", kills: 3, coins: 8 },
-    { name: "Player3", kills: 2, coins: 15 },
-  ])
+  const [playerScore, setPlayerScore] = useState(0)
+  useEffect(() => {
+    if (typeof socket !== "undefined") {
+      socket.on("scoreUpdate", ({ playerId, score }) => {
+        if (playerId === socket.id) {
+          setPlayerScore(score)
+        }
+      })
+    }
+    return () => {
+      if (typeof socket !== "undefined") {
+        socket.off("scoreUpdate")
+      }
+    }
+  }, [])
+  const [players, setPlayers] = useState([])
+  const [playerScore, setPlayerScore] = useState(0)
+  useEffect(() => {
+    if (typeof socket !== "undefined") {
+      socket.on("scoreUpdate", ({ playerId, score }) => {
+        setPlayers((prev) => {
+          const updated = prev.filter((p) => p.id !== playerId)
+          return [...updated, { id: playerId, score }]
+        })
+        if (playerId === socket.id) {
+          setPlayerScore(score)
+        }
+      })
+    }
+    return () => {
+      if (typeof socket !== "undefined") {
+        socket.off("scoreUpdate")
+      }
+    }
+  }, [])
   const router = useRouter()
 
   useEffect(() => {
+    // Example: emit player movement (replace with real data)
+    // socket.emit("playerMove", { x: 100, y: 200 })
     // Load Phaser dynamically
     async function loadPhaser() {
       try {
@@ -153,23 +191,7 @@ export default function GamePage() {
       maxSize: 20, // Limit number of rockets on screen
     })
 
-    // Rocket collision with rocks
-    this.physics.add.collider(this.rockets, this.rocks, (rocket: any, rock: any) => {
-      // Create explosion effect (simple particle burst)
-      const particles = this.add.particles(rocket.x, rocket.y, "rocket", {
-        speed: { min: 50, max: 100 },
-        scale: { start: 0.3, end: 0 },
-        lifespan: 300,
-        quantity: 5,
-      })
-
-      // Clean up after explosion
-      this.time.delayedCall(300, () => {
-        particles.destroy()
-      })
-
-      rocket.destroy()
-    })
+    // Remove missile collision with rocks. Missiles should only impact ships or the volcano.
 
     // Create coins scattered around using the new pixelated coin image
     this.coins = this.physics.add.group()
@@ -208,6 +230,12 @@ export default function GamePage() {
     // Collect coins
     this.physics.add.overlap(this.player, this.coins, (player: any, coin: any) => {
       coin.destroy()
+      // Emit coin collection event to server
+      if (typeof window !== "undefined" && window.socket) {
+        window.socket.emit("coinCollected", { playerId: window.socket.id })
+      } else if (typeof socket !== "undefined") {
+        socket.emit("coinCollected", { playerId: socket.id })
+      }
       // Update score logic would go here
     })
 
@@ -227,11 +255,7 @@ export default function GamePage() {
     const zoom = Math.max(zoomX, zoomY) * 5 // Multiply by 5 to get proper 20% view
     this.cameras.main.setZoom(zoom)
 
-    // Create virtual joystick area (placeholder)
-    const joystickArea = this.add.circle(100, this.cameras.main.height - 100, 50, 0x000000, 0.3)
-    const joystickKnob = this.add.circle(100, this.cameras.main.height - 100, 20, 0x666666, 0.8)
-    joystickArea.setScrollFactor(0) // Keep UI elements fixed to camera
-    joystickKnob.setScrollFactor(0)
+    // Removed joystick background dots
 
     // Input controls
     this.cursors = this.input.keyboard.createCursorKeys()
@@ -387,18 +411,20 @@ export default function GamePage() {
                 Leaderboard
               </h2>
               <div className="space-y-2 text-xs">
-                {players.slice(0, 3).map((player, index) => (
-                  <div key={player.name} className="flex items-center justify-between p-2 bg-white/10 rounded">
-                    <div className="flex items-center space-x-2">
-                      <span className="text-yellow-400 font-bold">#{index + 1}</span>
-                      <span className="truncate max-w-20">{player.name}</span>
+                {[...players]
+                  .sort((a, b) => b.score - a.score)
+                  .slice(0, 3)
+                  .map((player, index) => (
+                    <div key={player.id} className="flex items-center justify-between p-2 bg-white/10 rounded">
+                      <div className="flex items-center space-x-2">
+                        <span className="text-yellow-400 font-bold">#{index + 1}</span>
+                        <span className="truncate max-w-20">{player.id === socket.id ? "You" : player.id.slice(0, 8)}</span>
+                      </div>
+                      <div className="text-xs">
+                        <span className="text-yellow-400 ml-2">{player.score} pts</span>
+                      </div>
                     </div>
-                    <div className="text-xs">
-                      <span className="text-red-400">{player.kills}K</span>
-                      <span className="text-yellow-400 ml-2">{player.coins}C</span>
-                    </div>
-                  </div>
-                ))}
+                  ))}
               </div>
             </div>
 
@@ -417,8 +443,7 @@ export default function GamePage() {
                   <span className="truncate max-w-20">Player</span>
                 </div>
                 <div className="text-xs">
-                  <span className="text-red-400">0K</span>
-                  <span className="text-yellow-400 ml-2">0C</span>
+                  <span className="text-yellow-400 ml-2">{playerScore} pts</span>
                 </div>
               </div>
             </div>
