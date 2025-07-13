@@ -1,0 +1,22 @@
+FROM node:18-alpine
+
+# Set working directory
+WORKDIR /app
+
+# Copy only what's needed
+COPY package.json pnpm-lock.yaml ./
+
+# Install production dependencies only
+RUN npm install -g pnpm && pnpm install --prod
+
+# Copy app code
+COPY . .
+
+# Expose the needed ports
+EXPOSE 4000 4001
+
+# Use a non-root user (optional, safer)
+USER node
+
+# Start the app
+CMD ["sh", "./ship-shoooter/start-servers.sh"]

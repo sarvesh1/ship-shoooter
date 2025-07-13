@@ -1,0 +1,17 @@
+// See https://containers.dev/implementors/json_reference/ for configuration reference
+{
+	"name": "GameServer.js project",
+	"build": {
+		"dockerfile": "Dockerfile"
+	},
+	"remoteUser": "node",
+	"forwardPorts": [4000, 4001],
+	"portsAttributes": {
+		"4000": {
+			"visibility": "public"
+		},
+		"4001": {
+			"visibility": "public"
+		}
+	}
+}

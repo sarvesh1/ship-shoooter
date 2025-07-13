@@ -1,0 +1,15 @@
+version: '3.9'
+
+services:
+  gameserver:
+    build:
+      context: .
+      dockerfile: ${DOCKERFILE:-Dockerfile}  # default to Dockerfile (dev)
+    ports:
+      - "4000:4000"
+      - "4001:4001"
+    volumes:
+      - ${MOUNT_CODE:-.}:/workspaces/game-server-nodejs  # optional in prod
+    working_dir: /workspaces/game-server-nodejs
+    command: ["sh", "./ship-shoooter/start-servers.sh"]
+    user: node
