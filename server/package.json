@@ -1,3 +1,14 @@
 {
-  // This file is no longer needed. Socket.IO is now handled by Next.js API route.
+  "name": "ship-shoooter-server",
+  "version": "1.0.0",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "socket.io": "^4.7.5"
+  }
 }
+

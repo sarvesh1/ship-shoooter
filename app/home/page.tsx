@@ -18,6 +18,7 @@ interface UserData {
 export default function HomePage() {
   const [userData, setUserData] = useState<UserData | null>(null)
   const [loading, setLoading] = useState(true)
+  const [playerName, setPlayerName] = useState<string>("")
   const router = useRouter()
 
   useEffect(() => {
@@ -41,6 +42,26 @@ export default function HomePage() {
       } finally {
         setLoading(false)
       }
+    }
+
+    // Generate or get player name
+    function randomName() {
+      const adjectives = ["Swift", "Brave", "Lucky", "Clever", "Fierce", "Mighty", "Cosmic", "Nimble", "Silent", "Wild"]
+      const animals = ["Falcon", "Tiger", "Wolf", "Eagle", "Shark", "Panther", "Dragon", "Fox", "Bear", "Hawk"]
+      return (
+        adjectives[Math.floor(Math.random() * adjectives.length)] +
+        animals[Math.floor(Math.random() * animals.length)] +
+        Math.floor(Math.random() * 1000)
+      )
+    }
+    let name = ""
+    if (typeof window !== "undefined") {
+      name = localStorage.getItem("playerName") || ""
+      if (!name) {
+        name = randomName()
+        localStorage.setItem("playerName", name)
+      }
+      setPlayerName(name)
     }
 
     loadUserData()
@@ -146,7 +167,7 @@ export default function HomePage() {
           <div className="flex justify-center mb-4">
             <div className="bg-gray-800 border-4 border-gray-600 rounded-lg px-8 py-2">
               <span className="text-blue-400 font-bold text-sm">name: </span>
-              <span className="text-white font-bold">{userData?.username || "Player"}</span>
+              <span className="text-white font-bold">{playerName}</span>
             </div>
           </div>
 
@@ -178,7 +199,13 @@ export default function HomePage() {
               {/* Center Play Button */}
               <div className="flex-1 flex justify-center px-8">
                 <Button
-                  onClick={() => router.push("/game")}
+                  onClick={() => {
+                    // Save name to localStorage (redundant, but ensures it's set)
+                    if (typeof window !== "undefined") {
+                      localStorage.setItem("playerName", playerName)
+                    }
+                    router.push("/game")
+                  }}
                   className="h-32 w-64 bg-gradient-to-b from-blue-500 to-blue-700 hover:from-blue-600 hover:to-blue-800 border-8 border-blue-900 text-white font-bold text-4xl rounded-2xl shadow-2xl transform hover:scale-105 transition-transform"
                 >
                   <div className="flex flex-col items-center">
