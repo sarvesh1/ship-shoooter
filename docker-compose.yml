@@ -10,6 +10,6 @@ services:
       - "4001:4001"
     volumes:
       - ${MOUNT_CODE:-.}:/workspaces/game-server-nodejs  # optional in prod
-    working_dir: /workspaces/game-server-nodejs
-    command: ["sh", "./ship-shoooter/start-servers.sh"]
+    working_dir: /app
+    command: ["sh", "./start-servers.sh"]
     user: node
