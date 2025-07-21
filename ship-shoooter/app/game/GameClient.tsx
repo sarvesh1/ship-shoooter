@@ -29,6 +29,7 @@ export default function GamePage() {
   const [myCoins, setMyCoins] = useState(0)
   // Track other players (id, name, x, y, etc)
   const [otherPlayers, setOtherPlayers] = useState<{ id: string; name: string; x: number; y: number }[]>([])
+  const [allPlayers, setAllPlayers] = useState<any[]>([])
   // Socket ref
   const socketRef = useRef<Socket | null>(null)
   const router = useRouter()
@@ -65,13 +66,14 @@ export default function GamePage() {
 
     // Listen for other players' updates and update leaderboard
     socket.on("players-update", (playersRaw: any[]) => {
+      setAllPlayers(playersRaw)
       // Filter out self for otherPlayers
       setOtherPlayers(
         playersRaw.filter((p) => p.name !== myName)
       )
-      // Sort all players by coins descending, take top 3 for leaderboard
-      const sorted = [...playersRaw].sort((a, b) => (b.coins || 0) - (a.coins || 0)).slice(0, 3)
-      setPlayers(sorted.map(p => ({ name: p.name, coins: p.coins || 0 })))
+      // Sort all players by coins descending
+      const sorted = [...playersRaw].sort((a, b) => (b.coins || 0) - (a.coins || 0));
+      setPlayers(sorted.map(p => ({ name: p.name, coins: p.coins || 0 })));
     })
 
     // Load Phaser dynamically
@@ -238,6 +240,10 @@ export default function GamePage() {
         // Use event to update React state
         const event = new CustomEvent("coin-collected")
         window.dispatchEvent(event)
+        // Emit player-score to server so all clients see updated points
+        if (socketRef.current) {
+          socketRef.current.emit("player-score")
+        }
       }
     })
 
@@ -427,10 +433,17 @@ export default function GamePage() {
               </h2>
               <div className="space-y-2 text-xs">
                 {players.map((player, index) => (
-                  <div key={player.name} className="flex items-center justify-between p-2 bg-white/10 rounded">
+                  <div
+                    key={player.name}
+                    className={`flex items-center justify-between p-2 bg-white/10 rounded ${
+                      player.name === myName ? "border border-blue-400" : ""
+                    }`}
+                  >
                     <div className="flex items-center space-x-2">
                       <span className="text-yellow-400 font-bold">#{index + 1}</span>
-                      <span className="truncate max-w-20">{player.name}</span>
+                      <span className={`truncate max-w-20 ${player.name === myName ? "text-blue-400 font-bold" : ""}`}>
+                        {player.name}
+                      </span>
                     </div>
                     <div className="text-xs">
                       <span className="text-yellow-400 ml-2">{player.coins}C</span>
@@ -445,7 +458,7 @@ export default function GamePage() {
                 <Users className="h-4 w-4 mr-1" />
                 Online
               </h3>
-              <div className="text-2xl font-bold text-green-400">{players.length}/20</div>
+              <div className="text-2xl font-bold text-green-400">{allPlayers.length}/20</div>
             </div>
 
             <div className="border-t border-white/20 pt-3">
