@@ -39,6 +39,16 @@ server/.next/
 server/out/
 server/dist/
 
+# Production build output
+build/
+
+# Vercel deployment
+.vercel
+
+# TypeScript Next.js env
+next-env.d.ts
+
 # Misc
 *.local
 ship-shoooter/server/node_modules/*
+ship-shoooter/server/node_modules/.pnpm/node_modules/.bin/mime
