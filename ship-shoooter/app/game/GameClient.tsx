@@ -30,6 +30,8 @@ export default function GamePage() {
   // Track other players (id, name, x, y, etc)
   const [otherPlayers, setOtherPlayers] = useState<{ id: string; name: string; x: number; y: number }[]>([])
   const [allPlayers, setAllPlayers] = useState<any[]>([])
+  // Player lives state for health bar
+  const [playerLives, setPlayerLives] = useState(7)
   // Socket ref
   const socketRef = useRef<Socket | null>(null)
   const router = useRouter()
@@ -145,6 +147,9 @@ export default function GamePage() {
     // Load the rocket image
     this.load.image("rocket", "/images/rocket.png")
 
+    // Load the fireball image
+    this.load.image("fireball", "/images/fireball.png")
+
     // Create simple purple ground tiles (plain)
     this.add.graphics().fillStyle(0x7c3aed).fillRect(0, 0, 64, 64).generateTexture("purpleGround", 64, 64)
 
@@ -152,12 +157,24 @@ export default function GamePage() {
   }
 
   function create(this: any) {
+    // Initialize player lives ONCE per scene
+    this.playerLives = 7;
+
     // Store other player sprites
     this.otherPlayerSprites = {}
     // World size
     const worldWidth = 4000
     const worldHeight = 4000
     this.physics.world.setBounds(0, 0, worldWidth, worldHeight)
+
+    // Reference to update React state for lives
+    this.updatePlayerLives = (lives: number) => {
+      if (typeof window !== "undefined") {
+        // Use a custom event to update React state
+        const event = new CustomEvent("player-lives-update", { detail: { lives } })
+        window.dispatchEvent(event)
+      }
+    }
 
     // Ground tiles
     for (let x = 0; x < worldWidth; x += 64) {
@@ -176,6 +193,49 @@ export default function GamePage() {
     const volcanoScale = targetSize / 512
     volcano.setScale(volcanoScale)
     volcano.setDepth(1)
+
+    // Fireballs group
+    this.fireballs = this.physics.add.group({
+      defaultKey: "fireball",
+      maxSize: 30,
+    })
+
+    // Fireball spawn timer: fires 3 fireballs every 7-10 seconds
+    const spawnFireballs = () => {
+      for (let i = 0; i < 3; i++) {
+        // Random angle in radians (0 to 2π), ensure at least 60° apart
+        const baseAngle = Math.random() * Math.PI * 2
+        const angle = baseAngle + (i * (Math.PI * 2 / 3)) + (Math.random() * (Math.PI / 6) - Math.PI / 12)
+        const speed = 300 + Math.random() * 100
+        const fireball = this.fireballs.get(volcanoX, volcanoY)
+        if (fireball) {
+          fireball.setActive(true)
+          fireball.setVisible(true)
+          fireball.setPosition(volcanoX, volcanoY)
+          fireball.setScale(0.3)
+          fireball.setDepth(1.7)
+          fireball.setRotation(angle + Math.PI / 4) // initial rotation, will be refined later
+          // Ensure physics body is enabled and circular for better collision
+          if (fireball.body) {
+            fireball.body.setEnable(true)
+            fireball.body.setAllowGravity(false)
+            fireball.body.setCircle(fireball.displayWidth / 2)
+            fireball.body.setOffset(
+              (fireball.displayWidth - fireball.body.width) / 2,
+              (fireball.displayHeight - fireball.body.height) / 2
+            )
+            fireball.body.setVelocity(Math.cos(angle) * speed, Math.sin(angle) * speed)
+          }
+          // Destroy after 6 seconds if not already
+          this.time.delayedCall(6000, () => { if (fireball.active) fireball.destroy() })
+        }
+      }
+      // Schedule next fireball volley in 7-10 seconds
+      const nextDelay = 7000 + Math.random() * 3000
+      this.time.delayedCall(nextDelay, spawnFireballs)
+    }
+    // Start the first volley after 3 seconds
+    this.time.delayedCall(3000, spawnFireballs)
 
     // ...rocks/obstacles removed...
 
@@ -262,6 +322,28 @@ export default function GamePage() {
       }
     })
 
+    // Fireball hits player
+    this.physics.add.overlap(this.player, this.fireballs, (player: any, fireball: any) => {
+      if (!fireball.active) return;
+      console.log("[DEBUG] Fireball hit player! Lives before:", this.playerLives);
+      fireball.destroy();
+      if (this.playerLives > 0) {
+        this.playerLives -= 1;
+        console.log("[DEBUG] Player lives after hit:", this.playerLives);
+        this.updatePlayerLives(this.playerLives);
+      }
+      this.cameras.main.shake(200, 0.01);
+    });
+
+    // Fireball hits rocket: both are destroyed
+    this.physics.add.overlap(this.fireballs, this.rockets, (fireball: any, rocket: any) => {
+      if (fireball.active && rocket.active) {
+        console.log("[DEBUG] Fireball and rocket destroyed each other!");
+        fireball.destroy();
+        rocket.destroy();
+      }
+    });
+
     // Camera follows player
     this.cameras.main.startFollow(this.player, true, 0.05, 0.05)
     const worldViewPercentage = 0.2
@@ -289,7 +371,20 @@ export default function GamePage() {
     rocket.setScale(0.4)
     rocket.setDepth(1.8)
     rocket.setRotation(this.player.rotation)
-    const speed = 400
+    // Ensure rocket physics body is enabled and set size for collision
+    if (rocket.body) {
+      rocket.body.setEnable(true)
+      rocket.body.setAllowGravity(false)
+      // Use a rectangle or circle for the rocket hitbox
+      rocket.body.setSize(rocket.displayWidth * 0.7, rocket.displayHeight * 0.7)
+      rocket.body.setOffset(
+        (rocket.displayWidth - rocket.body.width) / 2,
+        (rocket.displayHeight - rocket.body.height) / 2
+      )
+      // Debug log
+      console.log("[DEBUG] Rocket fired: body enabled?", rocket.body.enable, "size:", rocket.body.width, rocket.body.height)
+    }
+    const speed = 800
     const velocityX = Math.cos(this.player.rotation - Math.PI / 2) * speed
     const velocityY = Math.sin(this.player.rotation - Math.PI / 2) * speed
     rocket.setVelocity(velocityX, velocityY)
@@ -299,6 +394,18 @@ export default function GamePage() {
 
   function update(this: any) {
     if (!this.player) return
+
+    // Rotate fireballs to match their velocity direction
+    if (this.fireballs) {
+      this.fireballs.children.iterate((fireball: any) => {
+        if (fireball && fireball.active && fireball.body) {
+          const vx = fireball.body.velocity.x
+          const vy = fireball.body.velocity.y
+          // The fireball.png points bottom-left, so adjust by +90deg (PI/2)
+          fireball.rotation = Math.atan2(vy, vx) - Math.PI / 2 - Math.PI / 12
+        }
+      })
+    }
 
     // Send position and rotation to server
     if (socketRef.current && this.player) {
@@ -382,16 +489,34 @@ export default function GamePage() {
 
   // Listen for coin collection events to update myCoins
   // Also sync otherPlayers to window for Phaser
+  // Listen for coin collection events to update myCoins
   useEffect(() => {
     function handleCoinCollected() {
       setMyCoins((prev) => prev + 1)
     }
     window.addEventListener("coin-collected", handleCoinCollected)
-    // Sync otherPlayers to window for Phaser
-    window.__otherPlayers = otherPlayers
     return () => {
       window.removeEventListener("coin-collected", handleCoinCollected)
     }
+  }, [])
+
+  // Listen for player lives update events ONCE on mount
+  useEffect(() => {
+    function handlePlayerLivesUpdate(e: any) {
+      if (e && e.detail && typeof e.detail.lives === "number") {
+        console.log("[DEBUG] React received player-lives-update event:", e.detail.lives);
+        setPlayerLives(e.detail.lives)
+      }
+    }
+    window.addEventListener("player-lives-update", handlePlayerLivesUpdate)
+    return () => {
+      window.removeEventListener("player-lives-update", handlePlayerLivesUpdate)
+    }
+  }, [])
+
+  // Sync otherPlayers to window for Phaser
+  useEffect(() => {
+    window.__otherPlayers = otherPlayers
   }, [otherPlayers])
 
   return (
@@ -418,7 +543,7 @@ export default function GamePage() {
             <div className="bg-black/50 px-4 py-2 rounded-lg">
               <div className="flex space-x-1">
                 {[...Array(7)].map((_, i) => (
-                  <div key={i} className={`w-6 h-6 rounded ${i < 5 ? "bg-red-500" : "bg-gray-600"}`} />
+                  <div key={i} className={`w-6 h-6 rounded ${i < playerLives ? "bg-red-500" : "bg-gray-600"}`} />
                 ))}
               </div>
             </div>
