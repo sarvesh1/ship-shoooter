@@ -50,5 +50,4 @@ next-env.d.ts
 
 # Misc
 *.local
-ship-shoooter/server/node_modules/*
-ship-shoooter/server/node_modules/.pnpm/node_modules/.bin/mime
+ship-shoooter/server/node_modules/
