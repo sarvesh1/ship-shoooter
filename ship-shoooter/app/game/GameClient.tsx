@@ -225,7 +225,7 @@ export default function GamePage() {
       const distanceFromVolcano = Phaser.Math.Distance.Between(x, y, volcanoX, volcanoY)
       if (distanceFromVolcano > 300) {
         const coin = this.coins.create(x, y, "coin")
-        coin.setScale(0.5)
+        coin.setScale(0.3)
         coin.setDepth(1.5)
         this.tweens.add({ targets: coin, y: coin.y - 10, duration: 1000, yoyo: true, repeat: -1, ease: "Sine.easeInOut" })
         this.tweens.add({ targets: coin, rotation: Math.PI * 2, duration: 3000, repeat: -1, ease: "Linear" })
@@ -250,7 +250,16 @@ export default function GamePage() {
     // Rockets can destroy coins too
     this.physics.add.overlap(this.rockets, this.coins, (rocket: any, coin: any) => {
       coin.destroy()
-      // Could add bonus points for rocket collection
+      // Award points for shooting a coin with a rocket
+      if (typeof window !== "undefined") {
+        // Use event to update React state
+        const event = new CustomEvent("coin-collected")
+        window.dispatchEvent(event)
+        // Emit player-score to server so all clients see updated points
+        if (socketRef.current) {
+          socketRef.current.emit("player-score")
+        }
+      }
     })
 
     // Camera follows player
