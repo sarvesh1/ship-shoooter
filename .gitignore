@@ -51,3 +51,7 @@ next-env.d.ts
 # Misc
 *.local
 ship-shoooter/server/node_modules/
+# Ignore pnpm workspace state file
+ship-shoooter/server/node_modules/.pnpm-workspace-state-v1.json
+# Ignore all node_modules content recursively
+**/node_modules/
