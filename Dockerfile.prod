@@ -12,6 +12,11 @@ USER node
 
 RUN pnpm install --prod
 
+# Add these lines to install server dependencies
+COPY --chown=node:node ship-shoooter/server/package.json ship-shoooter/server/pnpm-lock.yaml ./server/
+
+RUN cd server && pnpm install --prod
+
 COPY --chown=node:node ship-shoooter/ ./
 
 RUN chmod +x ./start-servers.sh
