@@ -12,7 +12,12 @@ import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { AuthGuard } from "@/components/auth-guard"
 import { ArrowLeft, Users, Trophy } from "lucide-react"
-
+import {
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog"
 
 // Phaser game will be loaded dynamically
 let Phaser: any = null
@@ -32,6 +37,10 @@ export default function GamePage() {
   const [allPlayers, setAllPlayers] = useState<any[]>([])
   // Player lives state for health bar
   const [playerLives, setPlayerLives] = useState(7)
+  // Game Over Modal state
+  const [gameOverModalOpen, setGameOverModalOpen] = useState(false)
+  // For tracking previous lives to avoid spurious triggers
+  const prevPlayerLivesRef = useRef(playerLives)
   // Socket ref
   const socketRef = useRef<Socket | null>(null)
   const router = useRouter()
@@ -526,7 +535,7 @@ export default function GamePage() {
         rotation: this.player.rotation,
       })
     }
-    const speed = 600
+    const speed = 752
     this.player.setVelocity(0)
     if (this.cursors.left.isDown || this.wasd.A.isDown) {
       this.player.setVelocityX(-speed)
@@ -624,6 +633,30 @@ export default function GamePage() {
       window.removeEventListener("player-lives-update", handlePlayerLivesUpdate)
     }
   }, [])
+  
+  // Watch for lives dropping to 0: show Game Over modal
+  useEffect(() => {
+    if (prevPlayerLivesRef.current > 0 && playerLives === 0) {
+      setGameOverModalOpen(true)
+    }
+    prevPlayerLivesRef.current = playerLives
+  }, [playerLives])
+  
+  // Handle Restart: Reset lives only, keep coins
+  function handleRestartGame() {
+    // Dispatch event to reset lives to 7
+    if (typeof window !== "undefined") {
+      const event = new CustomEvent("player-lives-update", { detail: { lives: 7 } })
+      window.dispatchEvent(event)
+      setGameOverModalOpen(false)
+      // Optionally, focus game canvas, unpause game logic if needed
+    }
+  }
+  
+  // Handle go home: use router
+  function handleGoHome() {
+    router.push("/home")
+  }
 
   // Sync otherPlayers to window for Phaser
   useEffect(() => {
@@ -633,10 +666,32 @@ export default function GamePage() {
   return (
     <AuthGuard>
       <div className="min-h-screen bg-transparent relative overflow-hidden">
+        {/* GAME OVER MODAL */}
+        <Dialog open={gameOverModalOpen} onOpenChange={setGameOverModalOpen}>
+          <DialogContent>
+            <DialogTitle>Game Over</DialogTitle>
+            <div className="py-2 text-center text-lg font-semibold text-red-600">You ran out of lives!</div>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={handleGoHome}
+                className="w-full sm:w-auto"
+              >
+                Go Home
+              </Button>
+              <Button
+                onClick={handleRestartGame}
+                className="w-full sm:w-auto"
+              >
+                Restart Game
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
         {/* Game Area - Full Screen */}
         <div className="absolute inset-0">
           <div ref={gameRef} className="w-full h-full" />
-
+  
           {/* Game UI Overlay */}
           <div className="absolute top-4 left-4 z-20">
             <Button
@@ -648,7 +703,7 @@ export default function GamePage() {
               Exit Game
             </Button>
           </div>
-
+  
           {/* Health Bar */}
           <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-20">
             <div className="bg-black/50 px-4 py-2 rounded-lg">
@@ -659,7 +714,7 @@ export default function GamePage() {
               </div>
             </div>
           </div>
-
+  
           {/* Controls Info */}
           <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 z-20">
             <div className="bg-black/50 px-4 py-2 rounded-lg text-white text-sm">
@@ -668,7 +723,7 @@ export default function GamePage() {
               </div>
             </div>
           </div>
-
+  
           {/* Compact Leaderboard - Top Right, taller to fit all content */}
           <div className="absolute top-4 right-4 w-64 bg-black/30 backdrop-blur-sm text-white p-4 rounded-lg z-10 h-80">
             <div className="mb-4">
@@ -697,7 +752,7 @@ export default function GamePage() {
                 ))}
               </div>
             </div>
-
+  
             <div className="mb-4">
               <h3 className="text-sm font-bold mb-2 flex items-center">
                 <Users className="h-4 w-4 mr-1" />
@@ -705,7 +760,7 @@ export default function GamePage() {
               </h3>
               <div className="text-2xl font-bold text-green-400">{allPlayers.length}/20</div>
             </div>
-
+  
             <div className="border-t border-white/20 pt-3">
               <div className="flex items-center justify-between p-2 bg-white/10 rounded">
                 <div className="flex items-center space-x-2">
@@ -718,7 +773,7 @@ export default function GamePage() {
               </div>
             </div>
           </div>
-
+  
           {/* Shoot Button - Bottom Right */}
           <div className="absolute bottom-6 right-6 z-20">
             <Button
@@ -731,7 +786,7 @@ export default function GamePage() {
               </div>
             </Button>
           </div>
-
+  
           {/* Virtual Joystick - Bottom Left */}
           <div className="absolute bottom-6 left-6 z-20">
             <div className="relative">
@@ -740,7 +795,7 @@ export default function GamePage() {
               </div>
             </div>
           </div>
-
+  
           {!gameLoaded && (
             <div className="absolute inset-0 flex items-center justify-center bg-purple-600 z-30">
               <div className="text-white text-2xl font-bold">Loading Game...</div>
