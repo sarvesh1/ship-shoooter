@@ -115,7 +115,7 @@ export default function GamePage() {
       width: window.innerWidth,
       height: window.innerHeight,
       parent: gameRef.current,
-      backgroundColor: "#7C3AED", // Plain purple background
+      backgroundColor: "transparent", // Use transparent to allow CSS tiled bg
       physics: {
         default: "arcade",
         arcade: {
@@ -150,21 +150,106 @@ export default function GamePage() {
     // Load the fireball image
     this.load.image("fireball", "/images/fireball.png")
 
-    // Create simple purple ground tiles (plain)
-    this.add.graphics().fillStyle(0x7c3aed).fillRect(0, 0, 64, 64).generateTexture("purpleGround", 64, 64)
+    // Load background tile image
+    this.load.image("background", "/images/background.png")
 
     // (Removed: creation of darker purple rocks/obstacles as background tiles)
+
+    // Particle textures for debris and smoke (larger)
+    // Debris: a gray square (16x16)
+    this.add.graphics()
+      .fillStyle(0x757575)
+      .fillRect(0, 0, 16, 16)
+      .generateTexture("debrisParticle", 16, 16);
+    // Smoke: a white circle (32x32)
+    this.add.graphics()
+      .fillStyle(0xffffff, 0.5)
+      .fillCircle(16, 16, 16)
+      .generateTexture("smokeParticle", 32, 32);
+
+    // Spark: a bright yellow dot (10x10)
+    this.add.graphics()
+      .fillStyle(0xfff700, 1)
+      .fillCircle(5, 5, 5)
+      .generateTexture("sparkParticle", 10, 10);
+
   }
 
   function create(this: any) {
+    // Helper for particle explosion (debris and smoke)
+    this.createExplosion = (x: number, y: number) => {
+      // Debris burst config (larger scale)
+      const debrisEmitter = this.add.particles(0, 0, "debrisParticle", {
+        x: x,
+        y: y,
+        quantity: 22,
+        speed: { min: 210, max: 360 },
+        angle: { min: 0, max: 360 },
+        lifespan: 650,
+        scale: { start: 1.1, end: 0.4 },
+        alpha: { start: 1, end: 0 },
+        gravityY: 400,
+        tint: [0xb0bec5, 0x9e9e9e, 0xefefef],
+        rotate: { min: -90, max: 120 },
+        on: false,
+        emitting: false,
+        blendMode: "NORMAL"
+      });
+      debrisEmitter.explode(22, x, y);
+
+      // Smoke puff config (larger scale)
+      const smokeEmitter = this.add.particles(0, 0, "smokeParticle", {
+        x: x,
+        y: y,
+        quantity: 14,
+        speed: { min: 75, max: 150 },
+        angle: { min: 250, max: 290 },
+        lifespan: 1300,
+        scale: { start: 2.2, end: 2.8 },
+        alpha: { start: 0.65, end: 0 },
+        gravityY: -35,
+        tint: [0xffffff, 0xbdbdbd],
+        on: false,
+        emitting: false,
+        blendMode: "NORMAL"
+      });
+      smokeEmitter.explode(14, x, y);
+
+      // Additional sparks!
+      const sparkEmitter = this.add.particles(0, 0, "sparkParticle", {
+        x: x,
+        y: y,
+        quantity: 26,
+        speed: { min: 320, max: 500 },
+        angle: { min: 0, max: 360 },
+        lifespan: 450,
+        scale: { start: 0.5, end: 0.2 },
+        alpha: { start: 1, end: 0.3 },
+        gravityY: 200,
+        tint: [0xfff700, 0xffbe0b, 0xffdd57],
+        rotate: { min: 0, max: 360 },
+        on: false,
+        emitting: false,
+        blendMode: "ADD"
+      });
+      sparkEmitter.explode(26, x, y);
+
+      // Clean up emitters after use
+      this.time.delayedCall(1200, () => {
+        debrisEmitter.destroy();
+        smokeEmitter.destroy();
+        sparkEmitter.destroy();
+      });
+    };
+
     // Initialize player lives ONCE per scene
     this.playerLives = 7;
 
     // Store other player sprites
     this.otherPlayerSprites = {}
     // World size
-    const worldWidth = 4000
-    const worldHeight = 4000
+    const worldWidth = 8000
+    const worldHeight = 8000
     this.physics.world.setBounds(0, 0, worldWidth, worldHeight)
 
     // Reference to update React state for lives
@@ -176,42 +261,46 @@ export default function GamePage() {
       }
     }
 
-    // Ground tiles
-    for (let x = 0; x < worldWidth; x += 64) {
-      for (let y = 0; y < worldHeight; y += 64) {
-        this.add.image(x, y, "purpleGround").setOrigin(0, 0)
-      }
-    }
+    // Ground tiles - use a tileSprite to fill world with the background.png in a performance-friendly way
+    this.backgroundTile = this.add.tileSprite(0, 0, worldWidth, worldHeight, "background").setOrigin(0, 0).setDepth(0)
 
     // Volcano in center
-    const volcanoX = worldWidth / 2
-    const volcanoY = worldHeight / 2
-    const volcano = this.add.image(volcanoX, volcanoY, "volcano")
-    const viewportWidth = this.cameras.main.width
-    const viewportHeight = this.cameras.main.height
-    const targetSize = Math.min(viewportWidth, viewportHeight) * 0.4
-    const volcanoScale = targetSize / 512
-    volcano.setScale(volcanoScale)
-    volcano.setDepth(1)
+    // Volcano positions: center, top left, bottom right
+    const volcanoPositions = [
+      { x: worldWidth / 2, y: worldHeight / 2 },
+      { x: worldWidth / 4, y: worldHeight / 4 },           // top left quadrant
+      { x: (3 * worldWidth) / 4, y: (3 * worldHeight) / 4 } // bottom right quadrant
+    ]
+
+    const volcanos = volcanoPositions.map(({x, y}) => {
+      const volcanoSprite = this.add.image(x, y, "volcano");
+      const viewportWidth = this.cameras.main.width
+      const viewportHeight = this.cameras.main.height
+      const targetSize = Math.min(viewportWidth, viewportHeight) * 0.4
+      const volcanoScale = targetSize / 512
+      volcanoSprite.setScale(volcanoScale)
+      volcanoSprite.setDepth(1)
+      return { x, y, sprite: volcanoSprite }
+    })
 
     // Fireballs group
     this.fireballs = this.physics.add.group({
       defaultKey: "fireball",
-      maxSize: 30,
+      maxSize: 90, // increased cap (3 volcanoes * 3 fireballs max)
     })
 
-    // Fireball spawn timer: fires 3 fireballs every 7-10 seconds
-    const spawnFireballs = () => {
+    // Fireball spawn timer per volcano: fires 3 fireballs every 7-10 seconds per volcano
+    const spawnFireballsFromVolcano = (x: number, y: number) => {
       for (let i = 0; i < 3; i++) {
         // Random angle in radians (0 to 2π), ensure at least 60° apart
         const baseAngle = Math.random() * Math.PI * 2
         const angle = baseAngle + (i * (Math.PI * 2 / 3)) + (Math.random() * (Math.PI / 6) - Math.PI / 12)
         const speed = 300 + Math.random() * 100
-        const fireball = this.fireballs.get(volcanoX, volcanoY)
+        const fireball = this.fireballs.get(x, y)
         if (fireball) {
           fireball.setActive(true)
           fireball.setVisible(true)
-          fireball.setPosition(volcanoX, volcanoY)
+          fireball.setPosition(x, y)
           fireball.setScale(0.3)
           fireball.setDepth(1.7)
           fireball.setRotation(angle + Math.PI / 4) // initial rotation, will be refined later
@@ -226,27 +315,31 @@ export default function GamePage() {
             )
             fireball.body.setVelocity(Math.cos(angle) * speed, Math.sin(angle) * speed)
           }
-          // Destroy after 6 seconds if not already
-          this.time.delayedCall(6000, () => { if (fireball.active) fireball.destroy() })
+          // Remove old timer: fireballs will be destroyed by position check in update()
+          // (handled in update() when outside of world bounds)
         }
       }
-      // Schedule next fireball volley in 7-10 seconds
-      const nextDelay = 7000 + Math.random() * 3000
-      this.time.delayedCall(nextDelay, spawnFireballs)
-    }
-    // Start the first volley after 3 seconds
-    this.time.delayedCall(3000, spawnFireballs)
+    };
 
-    // ...rocks/obstacles removed...
-
+    // For each volcano, set up independent fireball volleys
+    volcanos.forEach(({x, y}, idx) => {
+      const spawnNextVolley = () => {
+        spawnFireballsFromVolcano(x, y)
+        // Schedule next fireball volley in 7-10 seconds (stagger start times for variety)
+        const nextDelay = 7000 + Math.random() * 3000;
+        this.time.delayedCall(nextDelay, spawnNextVolley)
+      }
+      // Start the first volley after 3 seconds + idx*500ms (stagger start times)
+      this.time.delayedCall(3000 + idx * 500, spawnNextVolley)
+    })
 
     // Player spaceship - spawn at a random location in the world, not too close to volcano
-    let spawnX, spawnY
+    let spawnX: number, spawnY: number
     while (true) {
       spawnX = Phaser.Math.Between(100, worldWidth - 100)
       spawnY = Phaser.Math.Between(100, worldHeight - 100)
-      const distanceFromVolcano = Phaser.Math.Distance.Between(spawnX, spawnY, volcanoX, volcanoY)
-      if (distanceFromVolcano > 400) break // avoid spawning too close to volcano
+      const minDistance = Math.min(...volcanos.map(v => Phaser.Math.Distance.Between(spawnX, spawnY, v.x, v.y)))
+      if (minDistance > 400) break // avoid spawning too close to any volcano
     }
     this.player = this.physics.add.sprite(spawnX, spawnY, "player")
     this.player.setScale(0.5)
@@ -282,8 +375,8 @@ export default function GamePage() {
     for (let i = 0; i < 50; i++) {
       const x = Phaser.Math.Between(100, worldWidth - 100)
       const y = Phaser.Math.Between(100, worldHeight - 100)
-      const distanceFromVolcano = Phaser.Math.Distance.Between(x, y, volcanoX, volcanoY)
-      if (distanceFromVolcano > 300) {
+      const minDistance = Math.min(...volcanos.map(v => Phaser.Math.Distance.Between(x, y, v.x, v.y)))
+      if (minDistance > 300) {
         const coin = this.coins.create(x, y, "coin")
         coin.setScale(0.3)
         coin.setDepth(1.5)
@@ -326,6 +419,10 @@ export default function GamePage() {
     this.physics.add.overlap(this.player, this.fireballs, (player: any, fireball: any) => {
       if (!fireball.active) return;
       console.log("[DEBUG] Fireball hit player! Lives before:", this.playerLives);
+
+      // Particle explosion effect:
+      this.createExplosion(fireball.x, fireball.y);
+
       fireball.destroy();
       if (this.playerLives > 0) {
         this.playerLives -= 1;
@@ -339,6 +436,8 @@ export default function GamePage() {
     this.physics.add.overlap(this.fireballs, this.rockets, (fireball: any, rocket: any) => {
       if (fireball.active && rocket.active) {
         console.log("[DEBUG] Fireball and rocket destroyed each other!");
+        // Particle explosion effect at collision:
+        this.createExplosion(fireball.x, fireball.y);
         fireball.destroy();
         rocket.destroy();
       }
@@ -347,10 +446,11 @@ export default function GamePage() {
     // Camera follows player
     this.cameras.main.startFollow(this.player, true, 0.05, 0.05)
     const worldViewPercentage = 0.2
-    const zoomX = (viewportWidth * worldViewPercentage) / worldWidth
-    const zoomY = (viewportHeight * worldViewPercentage) / worldHeight
-    const zoom = Math.max(zoomX, zoomY) * 5
-    this.cameras.main.setZoom(zoom)
+    const camera = this.cameras.main
+    const zoomX = (camera.width * worldViewPercentage) / worldWidth
+    const zoomY = (camera.height * worldViewPercentage) / worldHeight
+    const zoom = Math.max(zoomX, zoomY) * 7 // Adjust zoom to fit world better
+    camera.setZoom(zoom)
 
     // Input controls
     this.cursors = this.input.keyboard.createCursorKeys()
@@ -384,7 +484,7 @@ export default function GamePage() {
       // Debug log
       console.log("[DEBUG] Rocket fired: body enabled?", rocket.body.enable, "size:", rocket.body.width, rocket.body.height)
     }
-    const speed = 800
+    const speed = 1000
     const velocityX = Math.cos(this.player.rotation - Math.PI / 2) * speed
     const velocityY = Math.sin(this.player.rotation - Math.PI / 2) * speed
     rocket.setVelocity(velocityX, velocityY)
@@ -395,14 +495,25 @@ export default function GamePage() {
   function update(this: any) {
     if (!this.player) return
 
-    // Rotate fireballs to match their velocity direction
+    // Rotate fireballs to match their velocity direction & destroy if outside world bounds
     if (this.fireballs) {
+      const bounds = this.physics.world.bounds;
       this.fireballs.children.iterate((fireball: any) => {
         if (fireball && fireball.active && fireball.body) {
           const vx = fireball.body.velocity.x
           const vy = fireball.body.velocity.y
-          // The fireball.png points bottom-left, so adjust by +90deg (PI/2)
-          fireball.rotation = Math.atan2(vy, vx) - Math.PI / 2 - Math.PI / 12
+          // The fireball.png points bottom-left, but must be rotated +90deg more: +225deg (5*PI/4)
+          fireball.rotation = Math.atan2(vy, vx) + (5 * Math.PI) / 4
+
+          // Destroy fireball if outside world bounds
+          if (
+            fireball.x < bounds.x - 100 ||
+            fireball.x > bounds.width + 100 ||
+            fireball.y < bounds.y - 100 ||
+            fireball.y > bounds.height + 100
+          ) {
+            fireball.destroy();
+          }
         }
       })
     }
@@ -415,7 +526,7 @@ export default function GamePage() {
         rotation: this.player.rotation,
       })
     }
-    const speed = 200
+    const speed = 600
     this.player.setVelocity(0)
     if (this.cursors.left.isDown || this.wasd.A.isDown) {
       this.player.setVelocityX(-speed)
@@ -521,7 +632,7 @@ export default function GamePage() {
 
   return (
     <AuthGuard>
-      <div className="min-h-screen bg-purple-600 relative overflow-hidden">
+      <div className="min-h-screen bg-transparent relative overflow-hidden">
         {/* Game Area - Full Screen */}
         <div className="absolute inset-0">
           <div ref={gameRef} className="w-full h-full" />
