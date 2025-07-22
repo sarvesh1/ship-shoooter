@@ -1,29 +1,21 @@
 FROM node:18-alpine
 
-# Set working directory
 WORKDIR /app
 
-# Copy only what's needed for dependencies
 COPY ship-shoooter/package.json ship-shoooter/pnpm-lock.yaml ./
 
-# Install pnpm globally and install production dependencies
 RUN npm install -g pnpm
-RUN pnpm install --prod
 
-# Copy all app source code from ship-shoooter folder into /app
-COPY ship-shoooter/ ./
-
-# Make sure start-servers.sh is executable
-RUN chmod +x ./start-servers.sh
-
-# Give ownership of /app to node user so it can write there
 RUN chown -R node:node /app
 
-# Expose the needed ports
-EXPOSE 4000 4001
-
-# Use a non-root user for safety
 USER node
 
-# Start the app by running the start script
+RUN pnpm install --prod
+
+COPY --chown=node:node ship-shoooter/ ./
+
+RUN chmod +x ./start-servers.sh
+
+EXPOSE 4000 4001
+
 CMD ["sh", "./start-servers.sh"]
